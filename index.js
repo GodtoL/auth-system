@@ -1,51 +1,142 @@
-import crypto from 'node:crypto';
-import dbLocal from 'db-local';
-import bcrypt from 'bcrypt';
+// import express from 'express';
+// import jwt from 'jsonwebtoken';
+// import crypto from 'crypto';
+// import { UserRepository } from './user-repository.js';
+
+// const JWT_SECRET = 'mi_clave_super_secreta_de_32_bytes!'; // Asegúrate de que tenga 32 bytes
+// const ALGORITHM = 'aes-256-cbc';
+// const IV_LENGTH = 8;
+
+// const app = express();
+// const port = process.env.PORT || 3001;
+
+// app.use(express.json());
+
+// function encrypt(text) {
+//     const iv = crypto.randomBytes(IV_LENGTH);
+//     const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(JWT_SECRET, 'utf-8'), iv);
+//     let encrypted = cipher.update(text);
+//     encrypted = Buffer.concat([encrypted, cipher.final()]);
+//     return iv.toString('hex') + ':' + encrypted.toString('hex');
+// }
+
+// function decrypt(text) {
+//     const parts = text.split(':');
+//     const iv = Buffer.from(parts.shift(), 'hex');
+//     const encryptedText = Buffer.from(parts.join(':'), 'hex');
+//     const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(JWT_SECRET, 'utf-8'), iv);
+//     let decrypted = decipher.update(encryptedText);
+//     decrypted = Buffer.concat([decrypted, decipher.final()]);
+//     return decrypted.toString();
+// }
+
+
+// // Endpoint de registro
+// app.post('/register', async (req, res) => {
+//     const { email, password, role } = req.body;
+//     try {
+//         const id = await UserRepository.create({ email, password, role });
+//         res.send({ id });
+//     } catch (error) {
+//         res.status(400).send(error.message);
+//     }
+// });
+
+// // Endpoint de inicio de sesión que devuelve un token con el rol del usuario
+// app.post('/login', async (req, res) => {
+//     const { email, password } = req.body;
+//     try {
+//         const user = await UserRepository.login({ email, password });
+
+//         const encryptedData = encrypt(JSON.stringify({ userId: user._id, role: user.role }));
+
+//         const token = jwt.sign({ data: encryptedData }, JWT_SECRET, {
+//             expiresIn: '1h',
+//         });
+//         res.send({ token });
+//     } catch (error) {
+//         res.status(401).send(error.message);
+//     }
+// });
+
+// // Middleware para autenticar con JWT
+// function authenticateToken(req, res, next) {
+//     const authHeader = req.headers['authorization'];
+//     const token = authHeader && authHeader.split(' ')[1];
+//     if (!token) return res.status(401).send('No autorizado');
+
+//     jwt.verify(token, JWT_SECRET, (err, decoded) => {
+//         if (err) return res.status(403).send('Token inválido o expirado');
+
+//         // Descifrar datos del token
+//         const decryptedData = decrypt(decoded.data);
+//         req.user = JSON.parse(decryptedData);
+//         next();
+//     });
+// }
+
+// // Middleware para verificar roles
+// function authorizeRole(role) {
+//     return (req, res, next) => {
+//         if (req.user.role !== role) {
+//             return res.status(403).send('No tienes permiso para acceder a esta ruta');
+//         }
+//         next();
+//     };
+// }
+
+// // Rutas protegidas
+// app.post('/admin', authenticateToken, authorizeRole('admin'), (req, res) => {
+//     res.send('Acceso autorizado solo para administradores');
+// });
+
+// app.post('/user', authenticateToken, authorizeRole('user'), (req, res) => {
+//     res.send('Acceso autorizado solo para usuarios');
+// });
+
+// app.listen(port, () => {
+//     console.log(`Server running on port ${port}`);
+// });
+
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { UserRepository } from './user-repository.js';
-import { SALT_ROUNDS } from './config.js';
 
-const { Schema } = new dbLocal({ path: './db' });
-
-const app = express();
-const port = process.env.PORT ?? 3001;
-
-// Secret key for JWT (deberías guardarla en variables de entorno)
+// Clave secreta para JWT (deberías almacenarla en variables de entorno)
 const JWT_SECRET = 'mi_secreto_super_seguro';
+const app = express();
+const port = process.env.PORT || 3001;
 
-app.set('view engine', 'ejs');
 app.use(express.json());
 
-// Endpoints
-app.get('/', (req, res) => {
-  res.render('example', { email: 'kk' });
-});
-
+// Endpoint de registro, donde puedes especificar el rol al crear un usuario
 app.post('/register', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
   try {
-    const id = await UserRepository.create({ email, password });
+    const id = await UserRepository.create({ email, password, role });
     res.send({ id });
   } catch (error) {
     res.status(400).send(error.message);
   }
 });
 
+// Endpoint de inicio de sesión que devuelve un token con el rol del usuario
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await UserRepository.login({ email, password });
 
-    // Generar el token JWT con el ID del usuario
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1h' });
+    // Generar el token JWT con el ID y rol del usuario
+    const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET, {
+      expiresIn: '1h',
+    });
     res.send({ token });
   } catch (error) {
     res.status(401).send(error.message);
   }
 });
 
-// Middleware para proteger rutas con JWT
+// Middleware para autenticar con JWT
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -58,135 +149,26 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// Ruta protegida de ejemplo
-app.post('/protected', authenticateToken, (req, res) => {
-  res.send(`Acceso autorizado. ID de usuario: ${req.user.userId}`);
+// Middleware para verificar roles
+function authorizeRole(role) {
+  return (req, res, next) => {
+    if (req.user.role !== role) {
+      return res.status(403).send('No tienes permiso para acceder a esta ruta');
+    }
+    next();
+  };
+}
+
+// Rutas protegidas
+app.post('/admin', authenticateToken, authorizeRole('admin'), (req, res) => {
+  res.send('Acceso autorizado solo para administradores');
+});
+
+app.post('/user', authenticateToken, authorizeRole('user'), (req, res) => {
+  res.send('Acceso autorizado solo para usuarios');
 });
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
 
-// import crypto from 'node:crypto';
-// import dbLocal from 'db-local';
-// import bcrypt from 'bcrypt';
-// import express from 'express';
-// import session from 'express-session';
-// import { UserRepository } from './user-repository.js';
-// import { SALT_ROUNDS } from './config.js';
-
-// const { Schema } = new dbLocal({ path: './db' });
-
-// const app = express();
-// const port = process.env.PORT ?? 3001;
-
-// app.set('view engine', 'ejs');
-// app.use(express.json());
-
-// // Configuración de la sesión
-// app.use(
-//   session({
-//     secret: 'mi_secreto', // Cambia esto por un secreto fuerte y único
-//     resave: false,
-//     saveUninitialized: false,
-//     cookie: { secure: false, httpOnly: true, maxAge: 3600000 }, // 1 hora
-//   })
-// );
-
-// // Endpoints
-// app.get('/', (req, res) => {
-//   res.render('example', { email: 'kk' });
-// });
-
-// app.post('/register', async (req, res) => {
-//   const { email, password } = req.body;
-//   try {
-//     const id = await UserRepository.create({ email, password });
-//     res.send({ id });
-//   } catch (error) {
-//     res.status(400).send(error.message);
-//   }
-// });
-
-// app.post('/login', async (req, res) => {
-//   const { email, password } = req.body;
-//   try {
-//     const user = await UserRepository.login({ email, password });
-
-//     // Guardar el ID de sesión en la cookie de sesión
-//     req.session.userId = user._id;
-//     res.send({ user });
-//   } catch (error) {
-//     res.status(401).send(error.message);
-//   }
-// });
-
-// app.post('/logout', (req, res) => {
-//   // Destruir la sesión al cerrar sesión
-//   req.session.destroy((err) => {
-//     if (err) {
-//       return res.status(500).send('Error al cerrar sesión');
-//     }
-//     res.send('Sesión cerrada');
-//   });
-// });
-
-// // Middleware para proteger rutas
-// function isAuthenticated(req, res, next) {
-//   if (req.session.userId) {
-//     return next();
-//   }
-//   res.status(401).send('No autorizado');
-// }
-
-// // Ruta protegida de ejemplo
-// app.post('/protected', isAuthenticated, (req, res) => {
-//   res.send('Acceso autorizado');
-// });
-
-// app.listen(port, () => {
-//   console.log(`Server running on port ${port}`);
-// });
-
-// import express from 'express'
-// import { UserRepository } from './user-repository.js'
-
-// const app = express()
-
-// app.set('view engine', 'ejs')
-
-// app.use(express.json())
-
-// const port = process.env.port ?? 3001
-
-// app.get('/', (req, res) => {
-//     res.render('example', {email : "kk"})
-// })
-// app.post('/login', async (req, res) => {
-//     const {email, password} = req.body
-//     try{
-//         const user = await UserRepository.login({ email , password})
-//         res.send({user})
-
-//     } catch (error){
-//         res.status(401).send(error.message)
-//     }
-// })
-// app.post('/register', async (req, res) => {
-//     const {email, password} = req.body
-//     console.log(req.body)
-
-//     try {
-//         const id = await UserRepository.create({ email, password})
-//         res.send( { id })
-//     } catch (error){
-//         res.status(400).send(error.message)
-//     }
-// })
-// app.post('/logout', (req, res) => {})
-
-// app.post('/protected', (req, res) => {})
-
-// app.listen(port, () => {
-//     console.log(`Server running on port ${port}`)
-// })
