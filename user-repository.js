@@ -1,6 +1,9 @@
+//user-repository.js
 import crypto from 'node:crypto';
 import dbLocal from 'db-local';
 import bcrypt from 'bcrypt';
+import { Sanitization } from './sanitization.js'; 
+
 import { SALT_ROUNDS } from './config.js';
 
 const { Schema } = new dbLocal({ path: './db' });
@@ -13,39 +16,81 @@ const User = Schema('User', {
 });
 
 export class UserRepository {
-  static async create({ email, password, role = 'user' }) {
-    Validation.email(email);
-    Validation.password(password);
+    static async create({ email, password, role = 'user' }) {
+        // Sanitizar entradas
+        email = Sanitization.email(email);
+        password = Sanitization.password(password);
+        
+        Validation.email(email);
+        Validation.password(password);
+      
+        const existingUser = User.findOne({ email });
+        if (existingUser) throw new Error('El email ya existe');
+      
+        const id = crypto.randomUUID();
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+      
+        User.create({
+          _id: id,
+          email,
+          password: hashedPassword,
+          role,
+        }).save();
+      
+        return id;
+      }
+      
+      static async login({ email, password }) {
+        // Sanitizar entradas
+        email = Sanitization.email(email);
+        password = Sanitization.password(password);
+        
+        Validation.email(email);
+        Validation.password(password);
+      
+        const user = User.findOne({ email });
+        if (!user) throw new Error("No existe el email");
+      
+        const isValid = await bcrypt.compareSync(password, user.password);
+        if (!isValid) throw new Error('Contraseña incorrecta');
+      
+        const { password: _, ...publicUser } = user;
+        return publicUser;
+      }
+      
+//   static async create({ email, password, role = 'user' }) {
+//     Validation.email(email);
+//     Validation.password(password);
 
-    const existingUser = User.findOne({ email });
-    if (existingUser) throw new Error('El email ya existe');
+//     const existingUser = User.findOne({ email });
+//     if (existingUser) throw new Error('El email ya existe');
 
-    const id = crypto.randomUUID();
-    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+//     const id = crypto.randomUUID();
+//     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    User.create({
-      _id: id,
-      email,
-      password: hashedPassword,
-      role,
-    }).save();
+//     User.create({
+//       _id: id,
+//       email,
+//       password: hashedPassword,
+//       role,
+//     }).save();
 
-    return id;
-  }
+//     return id;
+//   }
 
-  static async login({ email, password }) {
-    Validation.email(email);
-    Validation.password(password);
+//   static async login({ email, password }) {
+//     Validation.email(email);
+//     Validation.password(password);
 
-    const user = User.findOne({ email });
-    if (!user) throw new Error("No existe el email");
+//     const user = User.findOne({ email });
+//     if (!user) throw new Error("No existe el email");
 
-    const isValid = await bcrypt.compareSync(password, user.password);
-    if (!isValid) throw new Error('Contraseña incorrecta');
+//     const isValid = await bcrypt.compareSync(password, user.password);
+//     if (!isValid) throw new Error('Contraseña incorrecta');
 
-    const { password: _, ...publicUser } = user;
-    return publicUser;
-  }
+//     const { password: _, ...publicUser } = user;
+//     return publicUser;
+//   }
 }
 
 class Validation {
