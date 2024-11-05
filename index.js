@@ -4,16 +4,20 @@ import { UserRepository } from './user-repository.js'
 const app = express()
 app.use(express.json())
 
+app.set('view engine', 'ejs')
 const port = process.env.port ?? 3001
 
 app.get('/', (req, res) => {
-    res.send('Hola node js')
+    res.render('example', {username : "kk"})
 })
 app.post('/login', async (req, res) => {
+    const {username, password} = req.body
     try{
+        const user = await UserRepository.login({ username , password})
+        res.send({user})
 
     } catch (error){
-        h
+        res.status(401).send(error.message)
     }
 })
 app.post('/register', async (req, res) => {
@@ -21,7 +25,7 @@ app.post('/register', async (req, res) => {
     console.log(req.body)
 
     try {
-        const id = UserRepository.create({ username, password})
+        const id = await UserRepository.create({ username, password})
         res.send( { id })
     } catch (error){
         res.status(400).send(error.message)

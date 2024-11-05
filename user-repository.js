@@ -41,12 +41,15 @@ export class UserRepository{
         if (!user) throw new Error("No existe el username")
 
         const isValid = await bcrypt.compareSync(password, user.password)
-        return user
+        if (!isvalid) throw new Error('Contraseña incorrecta')
+
+        const {password: _, ...publicUser } = user
+        return publicUser
     }
 }
 
 class Validation {
-    static username (usernameq){
+    static username (username){
         if (typeof username != 'string') throw new Error('EL username debe ser un string')
         if (username.length < 3) throw new Error('El username debe tener mas de 3 caracteres')
     }
