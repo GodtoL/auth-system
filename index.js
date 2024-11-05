@@ -1,17 +1,27 @@
 // index.js
 import express from 'express';
-import jwt from 'jsonwebtoken';
+import csrf from 'csurf';
+import cookieParser from 'cookie-parser'; 
 import { UserRepository } from './user-repository.js';
+import jwt from 'jsonwebtoken';
 
-// Clave secreta para JWT (deberías almacenarla en variables de entorno)
-const JWT_SECRET = 'mi_secreto_super_seguro';
+
 const app = express();
-const port = process.env.PORT || 3001;
+const csrfProtection = csrf({ cookie: true }); // Esto activa el manejo de cookies
+const JWT_SECRET = 'your_jwt_secret'; 
 
+app.use(cookieParser());
 app.use(express.json());
+app.use(csrfProtection); 
+const port = process.env.PORT || 3001;
+// Endpoint para obtener el token CSRF
+app.get('/csrf-token', csrfProtection, (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
 
-// Endpoint de registro, donde puedes especificar el rol al crear un usuario
-app.post('/register', async (req, res) => {
+// Ruta de registro protegida por CSRF
+// Solo aplicar csrfProtection a las rutas necesarias
+app.post('/register', csrfProtection, async (req, res) => {
   const { email, password, role } = req.body;
   try {
     const id = await UserRepository.create({ email, password, role });
@@ -21,34 +31,43 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Endpoint de inicio de sesión que devuelve un token con el rol del usuario
+// Endpoint de inicio de sesión (sin csrfProtection)
 app.post('/login', async (req, res) => {
+  console.log('Request body:', req.body);
   const { email, password } = req.body;
   try {
-    const user = await UserRepository.login({ email, password });
+      const user = await UserRepository.login({ email, password });
 
-    // Generar el token JWT con el ID y rol del usuario
-    const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET, {
-      expiresIn: '1h',
-    });
-    res.send({ token });
+      // Generar el token JWT con el ID y rol del usuario
+      const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET, {
+          expiresIn: '1h',
+      });
+      res.send({ token });
   } catch (error) {
-    res.status(401).send(error.message);
-  }
+    console.error(error); // Para ver el error en la consola
+    res.status(401).send(error.message || 'Error de inicio de sesión');
+}
+
 });
+
+
 
 // Middleware para autenticar con JWT
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  if (!authHeader) return res.status(401).send('No autorizado');
+
+  const token = authHeader.split(' ')[1];
   if (!token) return res.status(401).send('No autorizado');
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).send('Token inválido o expirado');
-    req.user = user;
-    next();
+      if (err) return res.status(403).send('Token inválido o expirado');
+      req.user = user;
+      next();
   });
 }
+
+
 
 // Middleware para verificar roles
 function authorizeRole(role) {
