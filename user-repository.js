@@ -2,7 +2,6 @@
 import crypto from 'node:crypto';
 import dbLocal from 'db-local';
 import bcrypt from 'bcrypt';
-import { Sanitization } from './sanitization.js'; 
 
 import { SALT_ROUNDS } from './config.js';
 
@@ -12,15 +11,12 @@ const User = Schema('User', {
   _id: { type: String, required: true },
   email: { type: String, required: true },
   password: { type: String, required: true },
-  role: { type: String, required: true, default: 'user' }, // 'user' o 'admin'
+  role: { type: String, required: true, default: 'user' },
 });
 
 export class UserRepository {
     static async create({ email, password, role = 'user' }) {
-        // Sanitizar entradas
-        email = Sanitization.email(email);
-        password = Sanitization.password(password);
-        
+   
         Validation.email(email);
         Validation.password(password);
       
@@ -36,15 +32,11 @@ export class UserRepository {
           password: hashedPassword,
           role,
         }).save();
-      
         return id;
       }
       
 static async login({ email, password }) {
-        // Sanitizar entradas
-        email = Sanitization.email(email);
-        password = Sanitization.password(password);
-        
+       
         Validation.email(email);
         Validation.password(password);
       
@@ -57,6 +49,11 @@ static async login({ email, password }) {
         const { password: _, ...publicUser } = user;
         return publicUser;
       }
+
+    static async getAllUsers() {
+      // Suponiendo que User.find() retorna todos los usuarios
+      return User.find(); // Excluye el campo 'password' por seguridad
+  }
 }
 
 class Validation {
