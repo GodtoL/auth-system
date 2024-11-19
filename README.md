@@ -36,9 +36,6 @@ npm install
 Configura las variables de entorno (opcional): Crea un archivo .env en la raíz del proyecto para definir valores como claves secretas y otros ajustes.
 
 Inicia el servidor:
-
-bash
-Copiar código
 npm start
 El servidor estará disponible en http://localhost:3001.
 
